@@ -1,4 +1,0 @@
-recursive-include ovos_media_plugin_simple/ *
-recursive-include requirements/ *
-include CHANGELOG.md
-include LICENSE
