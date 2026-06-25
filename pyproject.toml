@@ -22,6 +22,10 @@ Homepage = "https://github.com/OpenVoiceOS/ovos-media-plugin-simple"
 [project.entry-points."opm.media.audio"]
 ovos-media-audio-plugin-simple = "ovos_media_plugin_simple:SimpleAudioService"
 
+# legacy ovos-audio service backend (so the plugin works on both stacks)
+[project.entry-points."mycroft.plugin.audioservice"]
+ovos_simple = "ovos_media_plugin_simple.audio"
+
 [tool.setuptools.dynamic]
 version = { attr = "ovos_media_plugin_simple.version.__version__" }
 
