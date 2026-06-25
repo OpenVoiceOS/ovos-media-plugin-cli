@@ -1,9 +1,10 @@
 import mimetypes
+import platform
 import re
+import shutil
 import signal
 import subprocess
 import time
-from distutils.spawn import find_executable
 from time import sleep
 
 from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend
@@ -44,23 +45,24 @@ def play_audio(uri, play_cmd):
         return None
 
 
-class SimpleBaseService(MediaBackend):
+class CLIBaseService(MediaBackend):
     """Framework-agnostic subprocess-based audio player.
 
     Holds all the playback logic (spawning/stopping a CLI player such as
     ``play``/``paplay``/``aplay``/``mpg123``, pause/resume via process signals,
     position estimation). It is shared by both backend flavours:
 
-    * new ``ovos-media`` — :class:`SimpleAudioService` (``AudioPlayerBackend``)
-    * legacy ``ovos-audio`` — :class:`~ovos_media_plugin_simple.audio.SimpleOldAudioService`
+    * new ``ovos-media`` — :class:`CLIAudioService` (``AudioPlayerBackend``)
+    * legacy ``ovos-audio`` — :class:`~ovos_media_plugin_cli.audio.CLIOldAudioService`
       (``AudioBackend``)
 
     so the two entry points drive the same engine with no duplicated logic.
     """
-    sox_play = find_executable("play")
-    pulse_play = find_executable("paplay")
-    alsa_play = find_executable("aplay")
-    mpg123_play = find_executable("mpg123")
+    sox_play = shutil.which("play")
+    pulse_play = shutil.which("paplay")
+    alsa_play = shutil.which("aplay")
+    mpg123_play = shutil.which("mpg123")
+    afplay = shutil.which("afplay")  # macOS
 
     def __init__(self, config, bus=None):
         super().__init__(config, bus)
@@ -94,7 +96,7 @@ class SimpleBaseService(MediaBackend):
         self.ts = 0
         self.ocp_error()
 
-    # simple player internals
+    # player internals
     def _get_track(self, track_data):
         if isinstance(track_data, list):
             track = track_data[0]
@@ -127,31 +129,44 @@ class SimpleBaseService(MediaBackend):
 
     @property
     def player_cmd(self):
-        """determine the best command to play a stream"""
-        # sox should handle almost every format, but fails in some urls
+        """The CLI command used to play a stream.
+
+        Resolution order:
+
+        1. an explicit command from config (``command`` / ``play_cmd``) — the
+           generic case: any CLI player you want, e.g. ``"mpv --no-terminal"`` or
+           ``"cvlc --play-and-exit"``. The track URI is appended as the last arg.
+        2. otherwise, the best available player is auto-detected for this platform
+           via :func:`shutil.which` (sox ``play`` → mpg123/paplay/aplay on Linux,
+           ``afplay`` on macOS).
+        """
+        # 1. explicit, user-configured command — fully generic
+        cmd = self.config.get("command") or self.config.get("play_cmd")
+        if cmd:
+            return cmd
+
+        # 2. auto-detect the best CLI player for this platform
+        # sox should handle almost every format, but fails on some urls
         if self.sox_play:
             track = self._now_playing
-            # NOTE: some urls like youtube streams will cause extension detection to fail
-            # let's handle it explicitly
+            # NOTE: some urls like youtube streams will cause extension detection
+            # to fail, let's handle it explicitly
             ext = track.split("?")[0].split(".")[-1]
-            player = self.sox_play + f" --type {ext}"
+            return self.sox_play + f" --type {ext}"
 
-        # determine best available player
-        else:
-            track, mime = self._get_track(self._now_playing)
-            LOG.debug(f'Mime info: {mime}')
+        # macOS
+        if platform.system() == "Darwin" and self.afplay:
+            return self.afplay
 
-            # wav file
-            player = None
-            if 'wav' in mime[1]:
-                player = self.pulse_play
-            # guess mp3
-            elif self.mpg123_play:
-                player = self.mpg123_play
-
-            # fallback to alsa, only wav files will play correctly
-            player = player or self.alsa_play
-        return player
+        track, mime = self._get_track(self._now_playing)
+        LOG.debug(f'Mime info: {mime}')
+        player = None
+        if 'wav' in mime[1]:
+            player = self.pulse_play
+        elif self.mpg123_play:
+            player = self.mpg123_play
+        # fallback to alsa, only wav files will play correctly
+        return player or self.alsa_play
 
     # audio service
     def supported_uris(self):
@@ -161,7 +176,7 @@ class SimpleBaseService(MediaBackend):
         return uris
 
     def play(self, repeat=False):
-        """ Play playlist using simple. """
+        """ Play the track via the configured/auto-detected CLI command. """
         # Stop any existing audio playback
         self._stop_running_process()
 
@@ -193,8 +208,8 @@ class SimpleBaseService(MediaBackend):
         self.on_track_end()
 
     def stop(self):
-        """ Stop simple playback. """
-        LOG.info('SimpleService Stop')
+        """ Stop playback. """
+        LOG.info('CLI player stop')
         if self._is_playing:
             self._stop_signal = True
             while self._is_playing:
@@ -204,7 +219,7 @@ class SimpleBaseService(MediaBackend):
         return False
 
     def pause(self):
-        """ Pause simple playback. """
+        """ Pause playback. """
         if self.process and not self._paused:
             # Suspend the playback process
             self.process.send_signal(signal.SIGSTOP)
@@ -259,10 +274,10 @@ class SimpleBaseService(MediaBackend):
         # Not available in this plugin
 
 
-class SimpleAudioService(AudioPlayerBackend, SimpleBaseService):
-    """Simple subprocess audio backend for the new ovos-media service.
+class CLIAudioService(AudioPlayerBackend, CLIBaseService):
+    """Subprocess CLI-command audio backend for the new ovos-media service.
 
-    ``SimpleBaseService`` is listed second; its concrete methods satisfy the
+    ``CLIBaseService`` is listed second; its concrete methods satisfy the
     abstract playback methods declared on ``AudioPlayerBackend``. All behaviour
-    lives in :class:`SimpleBaseService`.
+    lives in :class:`CLIBaseService`.
     """

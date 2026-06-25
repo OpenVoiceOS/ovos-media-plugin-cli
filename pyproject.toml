@@ -3,35 +3,36 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ovos-media-plugin-simple"
+name = "ovos-media-plugin-cli"
 dynamic = ["version"]
-description = "simple OCP plugin for ovos"
+description = "Generic CLI-command playback plugin for ovos-media (and the legacy ovos-audio service)"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "JarbasAi", email = "jarbasai@mailfence.com" },
 ]
-keywords = ["ovos", "audio", "OCP", "plugin"]
+keywords = ["ovos", "audio", "OCP", "plugin", "cli"]
 dependencies = [
     "ovos-plugin-manager>=2.1.0,<3.0.0",
+    "requests",
 ]
 
 [project.urls]
-Homepage = "https://github.com/OpenVoiceOS/ovos-media-plugin-simple"
+Homepage = "https://github.com/OpenVoiceOS/ovos-media-plugin-cli"
 
 [project.entry-points."opm.media.audio"]
-ovos-media-audio-plugin-simple = "ovos_media_plugin_simple:SimpleAudioService"
+ovos-media-audio-plugin-cli = "ovos_media_plugin_cli:CLIAudioService"
 
 # legacy ovos-audio service backend (so the plugin works on both stacks)
 [project.entry-points."mycroft.plugin.audioservice"]
-ovos_simple = "ovos_media_plugin_simple.audio"
+ovos_cli = "ovos_media_plugin_cli.audio"
 
 [tool.setuptools.dynamic]
-version = { attr = "ovos_media_plugin_simple.version.__version__" }
+version = { attr = "ovos_media_plugin_cli.version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ovos_media_plugin_simple*"]
+include = ["ovos_media_plugin_cli*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.voc", "*.intent", "*.dialog"]
