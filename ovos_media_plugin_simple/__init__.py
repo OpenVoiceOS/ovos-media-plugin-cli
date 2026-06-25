@@ -6,7 +6,7 @@ import time
 from distutils.spawn import find_executable
 from time import sleep
 
-from ovos_plugin_manager.templates.media import AudioPlayerBackend
+from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend
 from ovos_utils.log import LOG
 from requests import Session
 
@@ -44,7 +44,19 @@ def play_audio(uri, play_cmd):
         return None
 
 
-class SimpleAudioService(AudioPlayerBackend):
+class SimpleBaseService(MediaBackend):
+    """Framework-agnostic subprocess-based audio player.
+
+    Holds all the playback logic (spawning/stopping a CLI player such as
+    ``play``/``paplay``/``aplay``/``mpg123``, pause/resume via process signals,
+    position estimation). It is shared by both backend flavours:
+
+    * new ``ovos-media`` — :class:`SimpleAudioService` (``AudioPlayerBackend``)
+    * legacy ``ovos-audio`` — :class:`~ovos_media_plugin_simple.audio.SimpleOldAudioService`
+      (``AudioBackend``)
+
+    so the two entry points drive the same engine with no duplicated logic.
+    """
     sox_play = find_executable("play")
     pulse_play = find_executable("paplay")
     alsa_play = find_executable("aplay")
@@ -245,3 +257,12 @@ class SimpleAudioService(AudioPlayerBackend):
                 milliseconds (int): number of milliseconds of final position
         """
         # Not available in this plugin
+
+
+class SimpleAudioService(AudioPlayerBackend, SimpleBaseService):
+    """Simple subprocess audio backend for the new ovos-media service.
+
+    ``SimpleBaseService`` is listed second; its concrete methods satisfy the
+    abstract playback methods declared on ``AudioPlayerBackend``. All behaviour
+    lives in :class:`SimpleBaseService`.
+    """
