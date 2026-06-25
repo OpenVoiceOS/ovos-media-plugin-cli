@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0a1](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/tree/0.1.0a1) (2026-06-25)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/compare/0.0.2a6...0.1.0a1)
+
+**Merged pull requests:**
+
+- feat: dual-target — add legacy ovos-audio service entry point [\#2](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/pull/2) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.0.2a6](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/tree/0.0.2a6) (2026-06-17)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/compare/1f7679bd47baa16dcb94674eede87462354a4177...0.0.2a6)
