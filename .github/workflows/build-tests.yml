@@ -18,3 +18,7 @@ jobs:
       # attach to.
       system_deps: 'ffmpeg'
       test_env: 'SDL_AUDIODRIVER=dummy'
+      # TEMPORARY until ovos-plugin-manager 3.0.0a1 (the MediaBackend v2
+      # release) is on PyPI: install the v2 template from its feature
+      # branch so PlaybackEvent/report() resolve during install.
+      pre_install_pip: 'git+https://github.com/OpenVoiceOS/ovos-plugin-manager@feat/media-backend-v2'

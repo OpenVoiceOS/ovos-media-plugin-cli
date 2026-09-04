@@ -33,7 +33,9 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
         self._stop_signal = False
         self._is_playing = False
         self._paused = False
-        self.ts = 0
+        self._uri = None
+        self._event_reporter = None
+        self._stop_requested = False
         self.supports_mime_hints = True
         import mimetypes
         mimetypes.init()
