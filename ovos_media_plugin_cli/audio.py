@@ -27,6 +27,11 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
 
     def __init__(self, config, bus=None, name='cli'):
         AudioBackend.__init__(self, config, bus, name)
+        # MediaBackend's constructor is bypassed, but its concrete methods are
+        # still reachable through the MRO (the legacy add_list() path lands in
+        # MediaBackend.load_track), so every attribute those methods read must
+        # be initialized here. AudioBackend covers all of them except `meta`.
+        self.meta = {}
         # set up the shared subprocess player engine without the new
         # MediaBackend constructor
         self.process = None
