@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.5a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.5a1) (2026-09-08)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.4a1...0.0.5a1)
+
+**Merged pull requests:**
+
+- fix: initialize MediaBackend state the legacy adapter's MRO reaches [\#8](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/8) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.0.4a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.4a1) (2026-09-02)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.3a1...0.0.4a1)
