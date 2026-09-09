@@ -13,3 +13,8 @@ jobs:
       python_versions: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
       install_extras: 'test'
       test_path: 'test'
+      # test_e2e.py spawns the real ffplay binary as the CLI player; runners
+      # are headless (no sound card), so give SDL a dummy audio backend to
+      # attach to.
+      system_deps: 'ffmpeg'
+      test_env: 'SDL_AUDIODRIVER=dummy'
