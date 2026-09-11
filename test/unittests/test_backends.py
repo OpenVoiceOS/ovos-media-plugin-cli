@@ -35,19 +35,19 @@ class TestPlayerCommand(unittest.TestCase):
 
     def test_explicit_command_config_wins(self):
         svc = CLIAudioService({"command": "mpv --no-terminal"}, bus=MagicMock())
-        svc._now_playing = "https://example.com/song.mp3"
+        svc.load_track("https://example.com/song.mp3")
         self.assertEqual(svc.player_cmd, "mpv --no-terminal")
 
     def test_play_cmd_alias(self):
         svc = CLIAudioService({"play_cmd": "cvlc --play-and-exit"}, bus=MagicMock())
-        svc._now_playing = "x.mp3"
+        svc.load_track("x.mp3")
         self.assertEqual(svc.player_cmd, "cvlc --play-and-exit")
 
     def test_autodetect_when_unset(self):
         # with no explicit command, it resolves to *something* (or None if no
         # player is installed) without raising — the auto-detect path runs.
         svc = CLIAudioService({}, bus=MagicMock())
-        svc._now_playing = "x.mp3"
+        svc.load_track("x.mp3")
         _ = svc.player_cmd  # must not raise
 
 
