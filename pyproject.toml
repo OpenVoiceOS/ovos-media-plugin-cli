@@ -13,10 +13,7 @@ authors = [
 ]
 keywords = ["ovos", "audio", "OCP", "plugin", "cli"]
 dependencies = [
-    # floor pin resolves against the MediaBackend v2 template
-    # (report()/bind_event_reporter, PlaybackEvent); bump to
-    # >=3.0.0a1,<4.0.0 once ovos-plugin-manager 3.0.0 (the v2 release) ships
-    "ovos-plugin-manager>=2.11.6a1,<4.0.0",
+    "ovos-plugin-manager>=3.0.0a1,<4.0.0",
     "requests",
 ]
 
