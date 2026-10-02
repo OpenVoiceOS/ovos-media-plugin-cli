@@ -6,6 +6,7 @@ import signal
 import subprocess
 import time
 from time import sleep
+from typing import Optional
 
 from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend
 from ovos_utils.log import LOG
@@ -63,6 +64,10 @@ class CLIBaseService(MediaBackend):
     alsa_play = shutil.which("aplay")
     mpg123_play = shutil.which("mpg123")
     afplay = shutil.which("afplay")  # macOS
+
+    # set_track_position is a no-op: a subprocess CLI player exposes no seek
+    # control, so this backend has no seekable timeline to offer.
+    supports_seek = False
 
     def __init__(self, config, bus=None):
         super().__init__(config, bus)
@@ -255,21 +260,31 @@ class CLIBaseService(MediaBackend):
         """
         # Not available in this plugin
 
-    def get_track_length(self) -> int:
+    def get_track_length(self) -> Optional[int]:
         """
         getting the duration of the audio in milliseconds
-        """
-        # we only can estimate how much we already played as a minimum value
-        return self.get_track_position()
 
-    def get_track_position(self) -> int:
+        None when nothing is playing. This backend pipes to a CLI player and
+        never learns a duration from it, so a playing track also answers -1,
+        the MediaBackend contract's value for "plays, but has no known end"
+        (ovos-plugin-manager#442).
+        """
+        if not self.ts:
+            return None
+        return -1
+
+    def get_track_position(self) -> Optional[int]:
         """
         get current position in milliseconds
+
+        None when nothing is playing, per the MediaBackend contract
+        (ovos-plugin-manager#442): 0 is the legitimate start of a track and
+        must not be confused with no track playing.
         """
         # approximate given timestamp of playback start
         if self.ts:
             return int((time.time() - self.ts) * 1000)
-        return 0
+        return None
 
     def set_track_position(self, milliseconds):
         """
