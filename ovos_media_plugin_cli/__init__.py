@@ -191,6 +191,9 @@ class CLIBaseService(MediaBackend):
 
     def play(self):
         """ Play the loaded track via the configured/auto-detected CLI command. """
+        if not self._uri:
+            # nothing loaded: no player to start, so nothing to report
+            return
         # this track's turn; a newer play() takes the next one, before it
         # stops this one's player (see the check after the wait below)
         self._play_seq += 1
