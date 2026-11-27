@@ -75,6 +75,7 @@ class CLIBaseService(MediaBackend):
         self._stop_signal = False
         self._is_playing = False
         self._paused = False
+        self._play_seq = 0  # bumped by every play(), see play()
         self.ts = 0
 
         self.supports_mime_hints = True
@@ -188,6 +189,10 @@ class CLIBaseService(MediaBackend):
 
     def play(self, repeat=False):
         """ Play the track via the configured/auto-detected CLI command. """
+        # this track's turn; a newer play() takes the next one, before it
+        # stops this one's player (see the check after the wait below)
+        self._play_seq += 1
+        seq = self._play_seq
         # Stop any existing audio playback
         self._stop_running_process()
 
@@ -198,8 +203,9 @@ class CLIBaseService(MediaBackend):
         uri = self._now_playing.replace('file://', '')
 
         self.on_track_start()
+        process = None
         try:
-            self.process = play_audio(uri, self.player_cmd)
+            process = self.process = play_audio(uri, self.player_cmd)
         except FileNotFoundError as e:
             LOG.error(f'Couldn\'t play audio, {e}')
             self.process = None
@@ -209,10 +215,18 @@ class CLIBaseService(MediaBackend):
             self.process = None
             self.on_track_error()
 
-        # Wait for completion or stop request
-        while (self._is_process_running() and not self._stop_signal):
+        # Wait for completion or stop request. Each play() runs on its own
+        # thread and watches its OWN player: a newer play() (next, previous,
+        # a new request) stops this one's player and starts its own, and
+        # watching self.process would follow that one instead - staying
+        # behind until it ends and then reporting its end as well.
+        while (process is not None and process.poll() is None
+               and not self._stop_signal):
             sleep(0.25)
 
+        if seq != self._play_seq:
+            # replaced by a newer track: that one reports for itself
+            return
         if self._stop_signal:
             self._stop_running_process()
 
