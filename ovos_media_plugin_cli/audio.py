@@ -9,7 +9,7 @@ audio-service contract so this plugin works on both stacks:
   (discovered via :func:`load_service`)
 """
 import time
-from threading import Thread
+from threading import Lock, Thread
 
 from ovos_plugin_manager.templates.audio import AudioBackend
 from ovos_utils.log import LOG
@@ -44,6 +44,7 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
         self.ts = 0
         self._uri = None
         self._play_seq = 0
+        self._start_lock = Lock()
         self._event_reporter = None
         self._stop_requested = False
         self.supports_mime_hints = True

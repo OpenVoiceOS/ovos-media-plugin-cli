@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 from ovos_utils.fakebus import FakeBus
 from ovos_plugin_manager.templates.media import PlaybackEvent
 
-from ovos_media_plugin_cli import CLIAudioService
+from ovos_media_plugin_cli import CLIAudioService, CLIBaseService
 
 
 class RecordingReporter:
@@ -162,7 +162,7 @@ class TestSubprocessExitCode(unittest.TestCase):
         with patch("ovos_media_plugin_cli.play_audio",
                    return_value=FakeProcess(returncode)):
             with patch("ovos_media_plugin_cli.sleep"):
-                service.play()
+                CLIBaseService.play(service)
 
         return reporter
 

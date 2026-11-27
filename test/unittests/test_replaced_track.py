@@ -16,7 +16,7 @@ import unittest
 from ovos_utils.fakebus import FakeBus
 from ovos_plugin_manager.templates.media import PlaybackEvent
 
-from ovos_media_plugin_cli import CLIAudioService
+from ovos_media_plugin_cli import CLIAudioService, CLIBaseService
 
 
 class TestReplacedTrack(unittest.TestCase):
@@ -36,7 +36,8 @@ class TestReplacedTrack(unittest.TestCase):
 
     def _play(self, seconds):
         self.service.load_track(f"file://{seconds}")
-        thread = threading.Thread(target=self.service.play, daemon=True)
+        thread = threading.Thread(target=CLIBaseService.play,
+                                  args=(self.service,), daemon=True)
         thread.start()
         return thread
 
@@ -79,6 +80,19 @@ class TestReplacedTrack(unittest.TestCase):
         self.service.load_track("file://3")  # loaded, play() not yet called
         first.join(5)
         self.assertEqual(self.end_uris, ["file://0.5"])
+
+
+    def test_play_returns_before_the_track_ends(self):
+        """ovos-media calls play() on its player thread; a play() that
+        blocks for the track holds pause and stop behind it."""
+        self.service.load_track("file://1")
+        start = time.monotonic()
+        self.service.play()
+        self.assertLess(time.monotonic() - start, 0.5)
+        deadline = time.monotonic() + 5
+        while not self.ends and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.end_uris, ["file://1"])
 
 
 if __name__ == "__main__":
