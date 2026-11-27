@@ -1,12 +1,63 @@
 # Changelog
 
-## [0.0.2a6](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/tree/0.0.2a6) (2026-06-17)
+## [1.0.0a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/1.0.0a1) (2026-11-27)
 
-[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/compare/1f7679bd47baa16dcb94674eede87462354a4177...0.0.2a6)
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.7a1...1.0.0a1)
+
+**Breaking changes:**
+
+- feat!: port to MediaBackend v2 — report events, no bus state emission [\#7](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/7) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.7a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.7a1) (2026-11-27)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.6a1...0.0.7a1)
 
 **Merged pull requests:**
 
-- chore: add missing shared CI workflows [\#1](https://github.com/OpenVoiceOS/ovos-media-plugin-simple/pull/1) ([JarbasAl](https://github.com/JarbasAl))
+- fix: a track replaced by a newer one reports nothing [\#14](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/14) ([andlo](https://github.com/andlo))
+- fix: get\_track\_position/get\_track\_length honour the MediaBackend contract [\#12](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/12) ([openvoiceos-bot](https://github.com/openvoiceos-bot))
+
+## [0.0.6a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.6a1) (2026-09-09)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.5a1...0.0.6a1)
+
+**Merged pull requests:**
+
+- fix: honour the old audio-service lifecycle in the legacy adapter [\#10](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/10) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.5a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.5a1) (2026-09-08)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.4a1...0.0.5a1)
+
+**Merged pull requests:**
+
+- fix: initialize MediaBackend state the legacy adapter's MRO reaches [\#8](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/8) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.4a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.4a1) (2026-09-02)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.3a1...0.0.4a1)
+
+**Merged pull requests:**
+
+- fix: report natural track end and honour the stop contract [\#5](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/5) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.3a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.3a1) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.1.0a1...0.0.3a1)
+
+**Merged pull requests:**
+
+- fix: correct version\_file path in release workflow [\#3](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/3) ([JarbasAl](https://github.com/JarbasAl))
+- docs: rewrite README in Simplified Technical English [\#2](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/2) ([JarbasAl](https://github.com/JarbasAl))
+- test: end-to-end test via ovoscope OCPPlayerHarness [\#1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/1) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.1.0a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.1.0a1) (2026-06-25)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.2a6...0.1.0a1)
+
+## [0.0.2a6](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.2a6) (2026-06-17)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/1f7679bd47baa16dcb94674eede87462354a4177...0.0.2a6)
 
 
 

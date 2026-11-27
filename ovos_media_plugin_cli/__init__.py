@@ -5,9 +5,11 @@ import shutil
 import signal
 import subprocess
 import time
+from threading import Lock, Thread
 from time import sleep
+from typing import Optional
 
-from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend
+from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend, PlaybackEvent
 from ovos_utils.log import LOG
 from requests import Session
 
@@ -64,12 +66,19 @@ class CLIBaseService(MediaBackend):
     mpg123_play = shutil.which("mpg123")
     afplay = shutil.which("afplay")  # macOS
 
+    # set_track_position is a no-op: a subprocess CLI player exposes no seek
+    # control, so this backend has no seekable timeline to offer.
+    supports_seek = False
+
     def __init__(self, config, bus=None):
         super().__init__(config, bus)
         self.process = None
         self._stop_signal = False
         self._is_playing = False
         self._paused = False
+        self._uri = None
+        self._play_seq = 0  # bumped by every play(), see _claim_track()
+        self._start_lock = Lock()
         self.ts = 0
 
         self.supports_mime_hints = True
@@ -77,24 +86,25 @@ class CLIBaseService(MediaBackend):
 
     def on_track_start(self):
         self.ts = time.time()
-        # Indicate to audio service which track is being played
-        if self._track_start_callback:
-            self._track_start_callback(self._now_playing)
+        self.report(PlaybackEvent.TRACK_START)
 
-    def on_track_end(self):
+    def on_track_end(self, error=None, uri=None):
+        """The exit callback: the play() loop falls through here whenever
+        the player process is no longer running, for any reason - it ended
+        naturally, it was told to stop, or it (or spawning it) failed.
+
+        This is the ONE call site for ``report_track_end``: the base class
+        reads and clears its own explicit-stop flag to pick STOPPED vs
+        END_OF_MEDIA, and a non-None ``error`` (a nonzero subprocess exit
+        code, or a spawn failure) always wins as ERROR - see
+        ``report_track_end``'s docstring.
+        """
         self._is_playing = False
         self._paused = False
         self.process = None
+        self._stop_signal = False
         self.ts = 0
-        if self._track_start_callback:
-            self._track_start_callback(None)
-
-    def on_track_error(self):
-        self._is_playing = False
-        self._paused = False
-        self.process = None
-        self.ts = 0
-        self.ocp_error()
+        self.report_track_end(uri=uri or self._uri, error=error)
 
     # player internals
     def _get_track(self, track_data):
@@ -148,7 +158,7 @@ class CLIBaseService(MediaBackend):
         # 2. auto-detect the best CLI player for this platform
         # sox should handle almost every format, but fails on some urls
         if self.sox_play:
-            track = self._now_playing
+            track = self._uri
             # NOTE: some urls like youtube streams will cause extension detection
             # to fail, let's handle it explicitly
             ext = track.split("?")[0].split(".")[-1]
@@ -158,7 +168,7 @@ class CLIBaseService(MediaBackend):
         if platform.system() == "Darwin" and self.afplay:
             return self.afplay
 
-        track, mime = self._get_track(self._now_playing)
+        track, mime = self._get_track(self._uri)
         LOG.debug(f'Mime info: {mime}')
         player = None
         if 'wav' in mime[1]:
@@ -175,40 +185,88 @@ class CLIBaseService(MediaBackend):
             uris.append("https")
         return uris
 
-    def play(self, repeat=False):
-        """ Play the track via the configured/auto-detected CLI command. """
-        # Stop any existing audio playback
-        self._stop_running_process()
+    def load_track(self, uri: str, metadata: dict = None) -> bool:
+        """ Load the track to be played on the next play() call. """
+        self._uri = uri
+        self.meta = metadata or {}
+        return True
 
-        self._is_playing = True
-        self._paused = False
+    def play(self):
+        """ Play the loaded track and block until it ends or stops. """
+        if not self._uri:
+            # nothing loaded: no player to start, so nothing to report
+            return
+        self._play_loop(*self._claim_track())
 
-        # Replace file:// uri's with normal paths
-        uri = self._now_playing.replace('file://', '')
+    def _claim_track(self):
+        """Take the next play turn for the loaded uri.
 
-        self.on_track_start()
-        try:
-            self.process = play_audio(uri, self.player_cmd)
-        except FileNotFoundError as e:
-            LOG.error(f'Couldn\'t play audio, {e}')
-            self.process = None
-            self.on_track_error()
-        except Exception as e:
-            LOG.exception(repr(e))
-            self.process = None
-            self.on_track_error()
+        A newer play() takes the next turn before it stops this one's
+        player (see the check after the wait in _play_loop). The uri is
+        kept because a load_track() for the next track may land while
+        this one plays, and this track's end must carry this track's uri.
+        """
+        self._play_seq += 1
+        return self._play_seq, self._uri
 
-        # Wait for completion or stop request
-        while (self._is_process_running() and not self._stop_signal):
-            sleep(0.25)
-
-        if self._stop_signal:
+    def _play_loop(self, seq, track_uri):
+        # One track starts at a time: a start that overlaps another could
+        # stop the newer player, or leave its own player running unowned.
+        with self._start_lock:
+            if seq != self._play_seq:
+                # replaced before it started: the newer track reports
+                return
+            # Stop any existing audio playback
             self._stop_running_process()
 
-        self.on_track_end()
+            self._is_playing = True
+            self._paused = False
 
-    def stop(self):
-        """ Stop playback. """
+            # Replace file:// uri's with normal paths
+            uri = track_uri.replace('file://', '')
+
+            self.on_track_start()
+            error = None
+            process = None
+            try:
+                process = self.process = play_audio(uri, self.player_cmd)
+                if process is None:
+                    error = "failed to spawn player process"
+            except FileNotFoundError as e:
+                LOG.error(f'Couldn\'t play audio, {e}')
+                self.process = None
+                error = e
+            except Exception as e:
+                LOG.exception(repr(e))
+                self.process = None
+                error = e
+
+        # Wait for completion or stop request. Each play() runs on its own
+        # thread and watches its OWN player: a newer play() (next, previous,
+        # a new request) stops this one's player and starts its own, and
+        # watching self.process would follow that one instead - staying
+        # behind until it ends and then reporting its end as well.
+        while (process is not None and process.poll() is None
+               and not self._stop_signal):
+            sleep(0.25)
+
+        if seq != self._play_seq:
+            # replaced by a newer track: that one reports for itself
+            return
+        returncode = None
+        if self._stop_signal:
+            self._stop_running_process()
+        elif process is not None:
+            # a nonzero return code is an ERROR, never a natural end
+            returncode = process.poll()
+
+        if error is None and returncode:
+            error = f"player process exited with code {returncode}"
+
+        self.on_track_end(error=error, uri=track_uri)
+
+    def _stop(self):
+        """ Perform the actual stop; called by the base ``stop()``. """
         LOG.info('CLI player stop')
         if self._is_playing:
             self._stop_signal = True
@@ -224,6 +282,7 @@ class CLIBaseService(MediaBackend):
             # Suspend the playback process
             self.process.send_signal(signal.SIGSTOP)
             self._paused = True
+            self.report(PlaybackEvent.PAUSED)
 
     def resume(self):
         """ Resume paused playback. """
@@ -231,6 +290,7 @@ class CLIBaseService(MediaBackend):
             # Resume the playback process
             self.process.send_signal(signal.SIGCONT)
             self._paused = False
+            self.report(PlaybackEvent.RESUMED)
 
     def lower_volume(self):
         """Lower volume.
@@ -249,29 +309,22 @@ class CLIBaseService(MediaBackend):
         """
         # Not available in this plugin
 
-    def get_track_length(self) -> int:
-        """
-        getting the duration of the audio in milliseconds
-        """
-        # we only can estimate how much we already played as a minimum value
-        return self.get_track_position()
+    def get_track_length(self) -> Optional[int]:
+        """Duration in milliseconds: None when nothing plays, else -1.
 
-    def get_track_position(self) -> int:
+        A CLI player never reports a duration, and -1 is the MediaBackend
+        value for a track that plays with no known end.
         """
-        get current position in milliseconds
-        """
-        # approximate given timestamp of playback start
+        if not self.ts:
+            return None
+        return -1
+
+    def get_track_position(self) -> Optional[int]:
+        """Elapsed milliseconds since the player started, or None when
+        nothing plays."""
         if self.ts:
             return int((time.time() - self.ts) * 1000)
-        return 0
-
-    def set_track_position(self, milliseconds):
-        """
-        go to position in milliseconds
-          Args:
-                milliseconds (int): number of milliseconds of final position
-        """
-        # Not available in this plugin
+        return None
 
 
 class CLIAudioService(AudioPlayerBackend, CLIBaseService):
@@ -281,3 +334,15 @@ class CLIAudioService(AudioPlayerBackend, CLIBaseService):
     abstract playback methods declared on ``AudioPlayerBackend``. All behaviour
     lives in :class:`CLIBaseService`.
     """
+
+    def play(self):
+        """Start the loaded track and return at once.
+
+        ovos-media calls play() on its player thread, and pause/stop wait
+        behind it. The player loop runs on its own thread; the play turn
+        and uri are taken here, so fast loads keep their order.
+        """
+        if not self._uri:
+            return
+        Thread(target=self._play_loop, args=self._claim_track(),
+               daemon=True).start()
