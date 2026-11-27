@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/1.0.0a1) (2026-11-27)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.7a1...1.0.0a1)
+
+**Breaking changes:**
+
+- feat!: port to MediaBackend v2 — report events, no bus state emission [\#7](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/pull/7) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.0.7a1](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/tree/0.0.7a1) (2026-11-27)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-media-plugin-cli/compare/0.0.6a1...0.0.7a1)
