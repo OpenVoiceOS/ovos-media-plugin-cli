@@ -4,7 +4,9 @@ import re
 import shutil
 import signal
 import subprocess
+import time
 from time import sleep
+from typing import Optional
 
 from ovos_plugin_manager.templates.media import MediaBackend, AudioPlayerBackend, PlaybackEvent
 from ovos_utils.log import LOG
@@ -63,6 +65,10 @@ class CLIBaseService(MediaBackend):
     mpg123_play = shutil.which("mpg123")
     afplay = shutil.which("afplay")  # macOS
 
+    # set_track_position is a no-op: a subprocess CLI player exposes no seek
+    # control, so this backend has no seekable timeline to offer.
+    supports_seek = False
+
     def __init__(self, config, bus=None):
         super().__init__(config, bus)
         self.process = None
@@ -70,14 +76,17 @@ class CLIBaseService(MediaBackend):
         self._is_playing = False
         self._paused = False
         self._uri = None
+        self._play_seq = 0  # bumped by every play(), see play()
+        self.ts = 0
 
         self.supports_mime_hints = True
         mimetypes.init()
 
     def on_track_start(self):
+        self.ts = time.time()
         self.report(PlaybackEvent.TRACK_START)
 
-    def on_track_end(self, error=None):
+    def on_track_end(self, error=None, uri=None):
         """The exit callback: the play() loop falls through here whenever
         the player process is no longer running, for any reason - it ended
         naturally, it was told to stop, or it (or spawning it) failed.
@@ -92,7 +101,8 @@ class CLIBaseService(MediaBackend):
         self._paused = False
         self.process = None
         self._stop_signal = False
-        self.report_track_end(uri=self._uri, error=error)
+        self.ts = 0
+        self.report_track_end(uri=uri or self._uri, error=error)
 
     # player internals
     def _get_track(self, track_data):
@@ -174,21 +184,20 @@ class CLIBaseService(MediaBackend):
         return uris
 
     def load_track(self, uri: str, metadata: dict = None) -> bool:
-        """ Load the track to be played on the next play() call.
-
-        Also mirrors the uri into ``self._now_playing`` when present, so the
-        legacy ``AudioBackend`` adapter (:class:`~ovos_media_plugin_cli.audio.CLIOldAudioService`),
-        whose playlist bookkeeping (``next``/``previous``/``track_info``)
-        reads and writes that attribute directly, keeps working unchanged.
-        """
+        """ Load the track to be played on the next play() call. """
         self._uri = uri
         self.meta = metadata or {}
-        if hasattr(self, "_now_playing"):
-            self._now_playing = uri
         return True
 
     def play(self):
         """ Play the loaded track via the configured/auto-detected CLI command. """
+        # this track's turn; a newer play() takes the next one, before it
+        # stops this one's player (see the check after the wait below)
+        self._play_seq += 1
+        seq = self._play_seq
+        # a load_track() for the next track may land while this one plays;
+        # this track's end must still carry this track's uri
+        track_uri = self._uri
         # Stop any existing audio playback
         self._stop_running_process()
 
@@ -196,40 +205,47 @@ class CLIBaseService(MediaBackend):
         self._paused = False
 
         # Replace file:// uri's with normal paths
-        uri = self._uri.replace('file://', '')
+        uri = track_uri.replace('file://', '')
 
         self.on_track_start()
         error = None
+        process = None
         try:
-            self.process = play_audio(uri, self.player_cmd)
-            if self.process is None:
+            process = self.process = play_audio(uri, self.player_cmd)
+            if process is None:
                 error = "failed to spawn player process"
         except FileNotFoundError as e:
             LOG.error(f'Couldn\'t play audio, {e}')
             self.process = None
-            error = str(e)
+            error = e
         except Exception as e:
             LOG.exception(repr(e))
             self.process = None
-            error = str(e)
+            error = e
 
+        # Wait for completion or stop request. Each play() runs on its own
+        # thread and watches its OWN player: a newer play() (next, previous,
+        # a new request) stops this one's player and starts its own, and
+        # watching self.process would follow that one instead - staying
+        # behind until it ends and then reporting its end as well.
+        while (process is not None and process.poll() is None
+               and not self._stop_signal):
+            sleep(0.25)
+
+        if seq != self._play_seq:
+            # replaced by a newer track: that one reports for itself
+            return
         returncode = None
-        if self.process is not None:
-            # Wait for completion or stop request
-            while self._is_process_running() and not self._stop_signal:
-                sleep(0.25)
-
-            if self._stop_signal:
-                self._stop_running_process()
-            else:
-                # the process ended on its own; a nonzero return code is an
-                # ERROR, never a natural end (see report_track_end)
-                returncode = self.process.poll()
+        if self._stop_signal:
+            self._stop_running_process()
+        elif process is not None:
+            # a nonzero return code is an ERROR, never a natural end
+            returncode = process.poll()
 
         if error is None and returncode:
             error = f"player process exited with code {returncode}"
 
-        self.on_track_end(error=error)
+        self.on_track_end(error=error, uri=track_uri)
 
     def _stop(self):
         """ Perform the actual stop; called by the base ``stop()``. """
@@ -274,6 +290,23 @@ class CLIBaseService(MediaBackend):
         OpenVoiceOS has lowered it using lower_volume().
         """
         # Not available in this plugin
+
+    def get_track_length(self) -> Optional[int]:
+        """Duration in milliseconds: None when nothing plays, else -1.
+
+        A CLI player never reports a duration, and -1 is the MediaBackend
+        value for a track that plays with no known end.
+        """
+        if not self.ts:
+            return None
+        return -1
+
+    def get_track_position(self) -> Optional[int]:
+        """Elapsed milliseconds since the player started, or None when
+        nothing plays."""
+        if self.ts:
+            return int((time.time() - self.ts) * 1000)
+        return None
 
 
 class CLIAudioService(AudioPlayerBackend, CLIBaseService):
