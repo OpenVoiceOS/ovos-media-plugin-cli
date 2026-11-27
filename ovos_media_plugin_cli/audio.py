@@ -54,6 +54,18 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
         Thread(target=CLIBaseService.play, args=(self, repeat),
                daemon=True).start()
 
+    # ovos-plugin-manager 2.2.0 adds the offset to get_track_position()
+    # without a None check, and a stopped track reports None.
+    def seek_forward(self, seconds=1):
+        position = self.get_track_position()
+        if position is not None:
+            self.set_track_position(position + seconds * 1000)
+
+    def seek_backward(self, seconds=1):
+        position = self.get_track_position()
+        if position is not None:
+            self.set_track_position(position - seconds * 1000)
+
     def load_track(self, uri, metadata=None):
         # The legacy audio service owns every ovos.common_play state emission;
         # MediaBackend.load_track (the MRO default here) emits media.state
