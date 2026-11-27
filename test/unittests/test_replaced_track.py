@@ -14,9 +14,9 @@ import time
 import unittest
 
 from ovos_utils.fakebus import FakeBus
-from ovos_utils.ocp import MediaState
+from ovos_plugin_manager.templates.media import PlaybackEvent
 
-from ovos_media_plugin_cli import CLIAudioService
+from ovos_media_plugin_cli import CLIAudioService, CLIBaseService
 
 
 class TestReplacedTrack(unittest.TestCase):
@@ -25,16 +25,19 @@ class TestReplacedTrack(unittest.TestCase):
         self.bus = FakeBus()
         self.ends = []
         self.t0 = time.monotonic()
-        self.bus.on("ovos.common_play.media.state", self._on_state)
+        self.end_uris = []
         self.service = CLIAudioService({"command": "sleep"}, bus=self.bus)
+        self.service.bind_event_reporter(self._on_event)
 
-    def _on_state(self, message):
-        if message.data.get("state") == MediaState.END_OF_MEDIA:
+    def _on_event(self, event, **data):
+        if event == PlaybackEvent.END_OF_MEDIA:
             self.ends.append(time.monotonic() - self.t0)
+            self.end_uris.append(data.get("uri"))
 
     def _play(self, seconds):
-        self.service._now_playing = f"file://{seconds}"
-        thread = threading.Thread(target=self.service.play, daemon=True)
+        self.service.load_track(f"file://{seconds}")
+        thread = threading.Thread(target=CLIBaseService.play,
+                                  args=(self.service,), daemon=True)
         thread.start()
         return thread
 
@@ -67,6 +70,29 @@ class TestReplacedTrack(unittest.TestCase):
     def test_a_track_that_is_not_replaced_still_ends(self):
         self._play(0.3).join(5)
         self.assertEqual(len(self.ends), 1)
+
+    def test_an_end_carries_the_uri_of_the_track_that_ended(self):
+        """ovos-media drops a stale end only by its uri. A load_track() for
+        the next track that lands while this one still plays must not
+        relabel this track's end with the next track's uri."""
+        first = self._play(0.5)
+        time.sleep(0.1)
+        self.service.load_track("file://3")  # loaded, play() not yet called
+        first.join(5)
+        self.assertEqual(self.end_uris, ["file://0.5"])
+
+
+    def test_play_returns_before_the_track_ends(self):
+        """ovos-media calls play() on its player thread; a play() that
+        blocks for the track holds pause and stop behind it."""
+        self.service.load_track("file://1")
+        start = time.monotonic()
+        self.service.play()
+        self.assertLess(time.monotonic() - start, 0.5)
+        deadline = time.monotonic() + 5
+        while not self.ends and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.end_uris, ["file://1"])
 
 
 if __name__ == "__main__":

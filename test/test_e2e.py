@@ -88,6 +88,12 @@ class _EnvPatch:
             os.environ.pop(self.key, None)
 
 
+@unittest.skip(
+    "predates the MediaBackend v2 template: OCPPlayerHarness/OCPMediaPlayer "
+    "still drive the v1 contract (ocp_start/ocp_stop, _now_playing, "
+    "MediaState bus messages) this plugin no longer emits. Needs a v2-aware "
+    "ovoscope harness release before re-enabling."
+)
 @unittest.skipUnless(HAVE_HARNESS, "ovoscope[media] not installed")
 @unittest.skipUnless(HAVE_FFPLAY, "ffplay binary not installed")
 class TestCLIEndToEnd(unittest.TestCase):

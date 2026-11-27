@@ -85,6 +85,18 @@ class TestLegacyShimState(unittest.TestCase):
         self.assertGreater(len(seen), 0)
 
 
+class TestLegacyPlayWithoutTrack(unittest.TestCase):
+    """The legacy loader calls play() then stop() on a fresh backend."""
+
+    def test_stop_after_play_without_track_returns(self):
+        svc = CLIOldAudioService({"type": "ovos_cli"}, FakeBus(), "cli")
+        svc.play()
+        done = threading.Event()
+        threading.Thread(target=lambda: (svc.stop(), done.set()),
+                         daemon=True).start()
+        self.assertTrue(done.wait(2.0), "stop() hangs after play() with no track")
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -8,7 +8,8 @@ audio-service contract so this plugin works on both stacks:
 * legacy ``ovos-audio`` — ``mycroft.plugin.audioservice`` → :class:`CLIOldAudioService`
   (discovered via :func:`load_service`)
 """
-from threading import Thread
+import time
+from threading import Lock, Thread
 
 from ovos_plugin_manager.templates.audio import AudioBackend
 from ovos_utils.log import LOG
@@ -41,6 +42,11 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
         self._is_playing = False
         self._paused = False
         self.ts = 0
+        self._uri = None
+        self._play_seq = 0
+        self._start_lock = Lock()
+        self._event_reporter = None
+        self._stop_requested = False
         self.supports_mime_hints = True
         import mimetypes
         mimetypes.init()
@@ -50,8 +56,10 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
         # then returns; the legacy service calls play() inside its service
         # lock on a bus-handler thread and expects it to return promptly (the
         # end of the track reaches it later through _track_start_callback).
-        # Run the engine loop on its own thread.
-        Thread(target=CLIBaseService.play, args=(self, repeat),
+        # Run the engine loop on its own thread. AudioBackend.next/previous
+        # move _now_playing, so the engine plays whatever it holds.
+        self._uri = self._now_playing
+        Thread(target=CLIBaseService.play, args=(self,),
                daemon=True).start()
 
     # ovos-plugin-manager 2.2.0 adds the offset to get_track_position()
@@ -80,24 +88,23 @@ class CLIOldAudioService(CLIBaseService, AudioBackend):
     # the old contract's _track_start_callback, and an engine-initiated
     # ocp_stop/ocp_error re-enters the service's own handlers on a
     # synchronous bus and loops.
-    def on_track_end(self):
-        self._is_playing = False
-        self._paused = False
-        self.process = None
-        self.ts = 0
+    def on_track_start(self):
+        self.ts = time.time()
         if self._track_start_callback:
-            self._track_start_callback(None)
+            self._track_start_callback(self._now_playing)
 
-    def on_track_error(self):
+    def on_track_end(self, error=None, uri=None):
         self._is_playing = False
         self._paused = False
+        self._stop_signal = False
         self.process = None
         self.ts = 0
         if self._track_start_callback:
             self._track_start_callback(None)
-        # a spawn failure is reported through ocp_error, matching the
-        # behaviour legacy services expect from an audio backend
-        self.ocp_error()
+        if isinstance(error, Exception):
+            # a raised spawn failure is reported through ocp_error, as legacy
+            # services expect; a player exit code is not
+            self.ocp_error()
 
 
 def load_service(base_config, bus):
