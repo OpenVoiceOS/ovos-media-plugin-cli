@@ -87,3 +87,29 @@ class TestLegacyShimState(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLegacySeekWithoutTrack(unittest.TestCase):
+    """ovos-plugin-manager 2.2.0 adds the seek offset to the position with no
+    None check, and a stopped track reports None."""
+
+    def test_seek_forward_without_track_is_a_noop(self):
+        svc = CLIOldAudioService({"type": "ovos_cli"}, FakeBus(), "cli")
+        self.assertIsNone(svc.get_track_position())
+        with unittest.mock.patch.object(svc, "set_track_position") as stp:
+            svc.seek_forward(5)
+        stp.assert_not_called()
+
+    def test_seek_backward_without_track_is_a_noop(self):
+        svc = CLIOldAudioService({"type": "ovos_cli"}, FakeBus(), "cli")
+        with unittest.mock.patch.object(svc, "set_track_position") as stp:
+            svc.seek_backward(5)
+        stp.assert_not_called()
+
+    def test_seek_forward_with_track_moves_the_position(self):
+        svc = CLIOldAudioService({"type": "ovos_cli"}, FakeBus(), "cli")
+        svc.ts = time.time() - 10
+        with unittest.mock.patch.object(svc, "set_track_position") as stp:
+            svc.seek_forward(5)
+        (pos,), _ = stp.call_args
+        self.assertTrue(14000 <= pos <= 16000, pos)
